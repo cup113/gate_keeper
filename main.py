@@ -1,6 +1,6 @@
 import tkinter as tk
 from time import time
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 
 
 class Theme:
@@ -19,10 +19,8 @@ class Session:
     intent: str = ""
     total_sec: float = 0
     start_at: float = 0
-    passed_checkpoints: int = 0
     paused_at: float | None = None
     total_paused: float = 0
-    checkpoints: list[float] = field(default_factory=lambda: [0.5, 0.8])
 
 
 class VibeGate(tk.Tk):
@@ -52,24 +50,28 @@ class VibeGate(tk.Tk):
         self.y = event.y
 
     def do_drag(self, event: tk.Event):
+        if self.status == "VOID":
+            return
         dx = event.x - self.x
         dy = event.y - self.y
         x = self.winfo_x() + dx
         y = self.winfo_y() + dy
         self.geometry(f"+{x}+{y}")
 
-    def transition(self, target: str, size: tuple[int, int]):
+    def transition(self, target: str, size: tuple[int, int] | None = None):
         self.status = target
         for w in self.stage.winfo_children():
             w.destroy()
-        w, h = size
         sw, sh = self.winfo_screenwidth(), self.winfo_screenheight()
-        # 居中逻辑优化
-        self.geometry(f"{w}x{h}+{int((sw - w) / 2)}+{int((sh - h) / 4)}")
+        if size:
+            w, h = size
+        else:
+            w, h = sw, sh
+        self.geometry(f"{w}x{h}+{int((sw - w) / 2)}+0")
 
     # --- States ---
     def to_void(self):
-        self.transition("VOID", (400, 500))
+        self.transition("VOID")
 
         tk.Label(
             self.stage, text="GOAL", font=Theme.FONT_MONO, fg=Theme.ACCENT, bg=Theme.BG
@@ -95,6 +97,8 @@ class VibeGate(tk.Tk):
         ).pack(pady=(20, 5))
 
         def validation_core(p: str) -> bool:
+            if p == "":
+                return True
             try:
                 float(p)
                 return True
@@ -127,8 +131,9 @@ class VibeGate(tk.Tk):
                     start_at=time(),
                 )
                 self.to_silent()
-            except:
-                pass
+
+            except Exception as e:
+                print(f"Launch error: {e}")
 
         self.bind("<Return>", launch)
         tk.Button(
@@ -141,15 +146,6 @@ class VibeGate(tk.Tk):
             relief="flat",
             padx=30,
         ).pack(pady=40)
-        tk.Button(
-            self.stage,
-            text="EXIT",
-            font=Theme.FONT_MONO,
-            command=self.quit,
-            bg=Theme.BG,
-            fg="#444",
-            relief="flat",
-        ).pack()
 
     def to_silent(self):
         self.transition("SILENT", (220, 80))
@@ -172,7 +168,7 @@ class VibeGate(tk.Tk):
             self.lbl_time.config(fg=Theme.FG)
 
     def to_overtime(self):
-        self.transition("OVERTIME", (300, 250))
+        self.transition("OVERTIME", (400, 150))
         tk.Label(
             self.stage,
             text="LIMIT REACHED",
@@ -181,23 +177,25 @@ class VibeGate(tk.Tk):
             bg=Theme.BG,
         ).pack(pady=20)
 
-        # ROI: 7 (Snooze/Extra time)
         btn_frame = tk.Frame(self.stage, bg=Theme.BG)
         btn_frame.pack(pady=10)
 
-        def snooze():
-            self.session.total_sec += 300  # Add 5 mins
+        def add_time(mins: int):
+            self.session.total_sec += mins * 60
             self.to_silent()
 
-        tk.Button(
-            btn_frame,
-            text="+5 MIN",
-            command=snooze,
-            bg=Theme.BG,
-            fg=Theme.FG,
-            relief="flat",
-            padx=10,
-        ).pack(side="left", padx=5)
+        # 按时间升序排列：+2 / +5 / +15
+        for mins in [2, 5, 15]:
+            tk.Button(
+                btn_frame,
+                text=f"+{mins} MIN",
+                command=lambda m=mins: add_time(m),
+                bg=Theme.BG,
+                fg=Theme.FG,
+                relief="flat",
+                padx=5,
+            ).pack(side="left", padx=5)
+
         tk.Button(
             btn_frame,
             text="RELEASE",
