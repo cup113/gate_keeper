@@ -1,2 +1,3 @@
 __pycache__
 .ruff-cache
+*_history.json
