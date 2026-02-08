@@ -1,10 +1,10 @@
-import tkinter as tk
-from time import time
-from dataclasses import dataclass
-from typing import Callable
 import json
-from pathlib import Path
+import tkinter as tk
+from dataclasses import dataclass
 from datetime import datetime
+from pathlib import Path
+from time import time
+from typing import Callable
 
 
 class Theme:
@@ -25,8 +25,6 @@ class Session:
     start_at: float = 0
     paused_at: float | None = None
     total_paused: float = 0
-
-    # New: cap is based on ORIGINAL planned duration only
     planned_sec: float = 0
     extended_sec: float = 0
 
@@ -50,7 +48,6 @@ class Session:
 
     @property
     def extend_cap_sec(self) -> float:
-        # New rule: max(15, set/2) minutes, based on ORIGINAL planned duration only
         return max(15 * 60, self.planned_sec / 2)
 
     @property
@@ -62,11 +59,18 @@ class Session:
 
 
 class VibeGate(tk.Tk):
+    PROGRESS_WIDTH = 200
+    PROGRESS_HEIGHT = 8
+    HISTORY_LIMIT = 200
+    HISTORY_VISIBLE = 8
+    PRESETS = [0.5, 2, 5, 10, 15, 20, 30, 45, 60, 90, 120, 180]
+    EXTEND_OPTIONS = [2, 5, 15]
+
     def __init__(self):
         super().__init__()
         self.title("GateKeeper")
         self.configure(bg=Theme.BG)
-        self.attributes("-topmost", True)  # type: ignore
+        self.attributes("-topmost", True)  # type: ignore[arg-type]
         self.overrideredirect(True)
 
         self.session = Session()
@@ -75,13 +79,12 @@ class VibeGate(tk.Tk):
         self.history_path = Path("gate_keeper_history.json")
         self.history: list[dict] = self._load_history()
 
-        # Progress bar runtime refs
         self.progress_canvas: tk.Canvas | None = None
         self.progress_fill_id: int | None = None
-
         self._active_bindings: list[str] = []
 
-        # Drag mechanics
+        self._drag_x = 0
+        self._drag_y = 0
         self.bind("<Button-1>", self.start_drag)
         self.bind("<B1-Motion>", self.do_drag)
 
@@ -91,37 +94,33 @@ class VibeGate(tk.Tk):
         self.to_void()
         self.tick()
 
-    # --- Window Logic ---
-    def start_drag(self, event: tk.Event):
-        self.x = event.x
-        self.y = event.y
+    # --- Window / Binding plumbing ---
+    def start_drag(self, event: tk.Event) -> None:
+        self._drag_x = event.x
+        self._drag_y = event.y
 
-    def do_drag(self, event: tk.Event):
+    def do_drag(self, event: tk.Event) -> None:
         if self.status == "VOID":
             return
-        dx = event.x - self.x
-        dy = event.y - self.y
-        x = self.winfo_x() + dx
-        y = self.winfo_y() + dy
-        self.geometry(f"+{x}+{y}")
+        dx = event.x - self._drag_x
+        dy = event.y - self._drag_y
+        self.geometry(f"+{self.winfo_x() + dx}+{self.winfo_y() + dy}")
 
-    def _clear_bindings(self):
-        """Unbind all tracked event handlers"""
+    def _clear_bindings(self) -> None:
         for seq in self._active_bindings:
             self.unbind(seq)
         self._active_bindings.clear()
 
-    def _bind_tracked(self, sequence: str, func: Callable):
-        """Bind and track for cleanup"""
+    def _bind_tracked(self, sequence: str, func: Callable) -> None:
         self.bind(sequence, func)
         self._active_bindings.append(sequence)
 
-    def transition(self, target: str, size: tuple[int, int] | None = None):
+    def transition(self, target: str, size: tuple[int, int] | None = None) -> None:
         self.status = target
         self._clear_bindings()
 
-        for w in self.stage.winfo_children():
-            w.destroy()
+        for widget in self.stage.winfo_children():
+            widget.destroy()
 
         sw, sh = self.winfo_screenwidth(), self.winfo_screenheight()
         w, h = size if size else (sw, sh)
@@ -129,7 +128,6 @@ class VibeGate(tk.Tk):
 
     @staticmethod
     def _validate_float(value: str) -> bool:
-        """Validate numeric input"""
         if not value:
             return True
         try:
@@ -139,7 +137,7 @@ class VibeGate(tk.Tk):
             return False
 
     # --- States ---
-    def to_void(self):
+    def to_void(self) -> None:
         self.transition("VOID")
 
         tk.Label(
@@ -166,16 +164,7 @@ class VibeGate(tk.Tk):
             bg=Theme.BG,
         ).pack(pady=(16, 5))
 
-        def validation_core(p: str) -> bool:
-            if p == "":
-                return True
-            try:
-                float(p)
-                return True
-            except ValueError:
-                return False
-
-        vcmd = (self.register(validation_core), "%P")
+        vcmd = (self.register(self._validate_float), "%P")
         ent_time = tk.Entry(
             self.stage,
             font=Theme.FONT_H,
@@ -191,17 +180,14 @@ class VibeGate(tk.Tk):
         ent_time.insert(0, "20")
         ent_time.pack(pady=8)
 
-        # New: expanded preset buttons
-        presets = [0.5, 2, 5, 10, 15, 20, 30, 45, 60, 90, 120, 180]
         preset_frame = tk.Frame(self.stage, bg=Theme.BG)
         preset_frame.pack(pady=(6, 12))
-
-        for idx, mins in enumerate(presets):
-            txt = f"{mins:g}"
+        for idx, mins in enumerate(self.PRESETS):
+            text = f"{mins:g}"
             tk.Button(
                 preset_frame,
-                text=txt,
-                command=lambda m=txt: (
+                text=text,
+                command=lambda m=text: (
                     ent_time.delete(0, "end"),
                     ent_time.insert(0, m),
                 ),
@@ -212,21 +198,21 @@ class VibeGate(tk.Tk):
                 pady=2,
             ).grid(row=idx // 6, column=idx % 6, padx=3, pady=3)
 
-        def launch(_e: tk.Event | None = None):
+        def launch(_event: tk.Event | None = None) -> None:
             try:
                 mins = float(ent_time.get() or 25)
                 total = mins * 60
                 self.session = Session(
                     intent=ent_intent.get() or "FOCUS",
                     total_sec=total,
-                    planned_sec=total,  # cap baseline: original planned duration only
+                    planned_sec=total,
                     start_at=time(),
                 )
                 self.to_silent()
-            except Exception as e:
-                print(f"Launch error: {e}")
+            except Exception as exc:
+                print(f"Launch error: {exc}")
 
-        self.bind("<Return>", launch)
+        self._bind_tracked("<Return>", launch)
         tk.Button(
             self.stage,
             text="ENGAGE",
@@ -238,43 +224,42 @@ class VibeGate(tk.Tk):
             padx=30,
         ).pack(pady=16)
 
-        # New: history list
         self._render_history_list()
 
-    def to_silent(self):
+    def to_silent(self) -> None:
         self.transition("SILENT", (240, 96))
 
         self.lbl_time = tk.Label(
             self.stage, text="--:--", font=Theme.FONT_H, fg=Theme.FG, bg=Theme.BG
         )
-        self.lbl_time.pack(pady=(8, 2), expand=False)
+        self.lbl_time.pack(pady=(8, 2))
 
-        # New: simple progress bar
         self.progress_canvas = tk.Canvas(
-            self.stage, width=200, height=8, bg=Theme.BG, highlightthickness=0, bd=0
+            self.stage,
+            width=self.PROGRESS_WIDTH,
+            height=self.PROGRESS_HEIGHT,
+            bg=Theme.BG,
+            highlightthickness=0,
+            bd=0,
         )
         self.progress_canvas.pack(pady=(0, 10))
         self.progress_canvas.create_rectangle(
-            0, 0, 200, 8, outline=Theme.ACCENT, width=1
+            0,
+            0,
+            self.PROGRESS_WIDTH,
+            self.PROGRESS_HEIGHT,
+            outline=Theme.ACCENT,
+            width=1,
         )
         self.progress_fill_id = self.progress_canvas.create_rectangle(
-            0, 0, 0, 8, fill=Theme.ACCENT, width=0
+            0, 0, 0, self.PROGRESS_HEIGHT, fill=Theme.ACCENT, width=0
         )
 
-        self.lbl_time.bind("<Button-1>", lambda e: self.toggle_pause())
-        self.bind("<space>", lambda e: self.toggle_pause())
-        self.bind("<Escape>", lambda e: self.to_void())
+        self.lbl_time.bind("<Button-1>", lambda _e: self.toggle_pause())
+        self._bind_tracked("<space>", lambda _e: self.toggle_pause())
+        self._bind_tracked("<Escape>", lambda _e: self.to_void())
 
-    def toggle_pause(self):
-        if self.session.paused_at is None:
-            self.session.paused_at = time()
-            self.lbl_time.config(fg=Theme.WARN)
-        else:
-            self.session.total_paused += time() - self.session.paused_at
-            self.session.paused_at = None
-            self.lbl_time.config(fg=Theme.FG)
-
-    def to_overtime(self):
+    def to_overtime(self) -> None:
         self.transition("OVERTIME", (420, 170))
 
         tk.Label(
@@ -297,7 +282,7 @@ class VibeGate(tk.Tk):
         btn_frame = tk.Frame(self.stage, bg=Theme.BG)
         btn_frame.pack(pady=6)
 
-        def add_time(mins: int):
+        def add_time(mins: int) -> None:
             if not self.session.can_extend_min(mins):
                 return
             add_sec = mins * 60
@@ -305,12 +290,10 @@ class VibeGate(tk.Tk):
             self.session.extended_sec += add_sec
             self.to_silent()
 
-        # Keep only RELEASE when budget exhausted
-        options = [2, 5, 15]
-        any_extend = False
-        for mins in options:
+        can_extend_any = False
+        for mins in self.EXTEND_OPTIONS:
             if self.session.can_extend_min(mins):
-                any_extend = True
+                can_extend_any = True
                 tk.Button(
                     btn_frame,
                     text=f"+{mins} MIN",
@@ -321,7 +304,7 @@ class VibeGate(tk.Tk):
                     padx=8,
                 ).pack(side="left", padx=4)
 
-        if not any_extend:
+        if not can_extend_any:
             tk.Label(
                 self.stage,
                 text="EXTEND CAP REACHED",
@@ -330,7 +313,7 @@ class VibeGate(tk.Tk):
                 bg=Theme.BG,
             ).pack(pady=(0, 8))
 
-        def release():
+        def release() -> None:
             self._append_release_history()
             self.to_void()
 
@@ -344,21 +327,19 @@ class VibeGate(tk.Tk):
             padx=20,
         ).pack(side="left", padx=4)
 
-    def _start_tick(self):
-        """Start the timer tick loop"""
-        if self.tick_id is None:
-            self.tick()
+    # --- Timer / behavior ---
+    def toggle_pause(self) -> None:
+        if self.session.paused_at is None:
+            self.session.paused_at = time()
+            self.lbl_time.config(fg=Theme.WARN)
+        else:
+            self.session.total_paused += time() - self.session.paused_at
+            self.session.paused_at = None
+            self.lbl_time.config(fg=Theme.FG)
 
-    def _stop_tick(self):
-        """Stop the timer tick loop"""
-        if self.tick_id:
-            self.after_cancel(self.tick_id)
-            self.tick_id = None
-
-    def tick(self):
+    def tick(self) -> None:
         if self.status == "SILENT":
             remaining = self.session.remaining_sec
-
             if remaining <= 0:
                 self.to_overtime()
             else:
@@ -366,19 +347,22 @@ class VibeGate(tk.Tk):
                 pause_icon = " ⏸" if self.session.paused_at else ""
                 self.lbl_time.config(text=f"{m:02d}:{s:02d}{pause_icon}")
 
-                # New: progress bar update
                 if (
                     self.progress_canvas is not None
                     and self.progress_fill_id is not None
                 ):
-                    width = 200
-                    fill_w = int(width * self.session.progress)
-                    color = Theme.WARN if self.session.paused_at else Theme.ACCENT
-                    self.progress_canvas.coords(self.progress_fill_id, 0, 0, fill_w, 8)
-                    self.progress_canvas.itemconfig(self.progress_fill_id, fill=color)
+                    fill_w = int(self.PROGRESS_WIDTH * self.session.progress)
+                    fill_color = Theme.WARN if self.session.paused_at else Theme.ACCENT
+                    self.progress_canvas.coords(
+                        self.progress_fill_id, 0, 0, fill_w, self.PROGRESS_HEIGHT
+                    )
+                    self.progress_canvas.itemconfig(
+                        self.progress_fill_id, fill=fill_color
+                    )
 
         self.after(500, self.tick)
 
+    # --- History ---
     def _load_history(self) -> list[dict]:
         if not self.history_path.exists():
             return []
@@ -390,12 +374,13 @@ class VibeGate(tk.Tk):
 
     def _save_history(self) -> None:
         self.history_path.write_text(
-            json.dumps(self.history[-200:], ensure_ascii=True, indent=2),
+            json.dumps(
+                self.history[-self.HISTORY_LIMIT :], ensure_ascii=True, indent=2
+            ),
             encoding="utf-8",
         )
 
     def _append_release_history(self) -> None:
-        # Log only on RELEASE (as requested)
         if self.session.start_at <= 0:
             return
 
@@ -430,7 +415,7 @@ class VibeGate(tk.Tk):
         box = tk.Frame(self.stage, bg=Theme.BG)
         box.pack(pady=(0, 12))
 
-        for row in reversed(self.history[-8:]):
+        for row in reversed(self.history[-self.HISTORY_VISIBLE :]):
             line = (
                 f"{row.get('released_at', '')[-8:]}  "
                 f"{row.get('intent', 'FOCUS')}  "
