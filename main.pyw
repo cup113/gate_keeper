@@ -429,7 +429,7 @@ class GateKeeper(tk.Tk):
         self._overtime_steps_applied = steps
         w = self.OVERTIME_BASE_W + (steps * self.OVERTIME_GROWTH_W)
         h = self.OVERTIME_BASE_H + (steps * self.OVERTIME_GROWTH_H)
-        self.geometry(f"{w}x{h}+{(self.winfo_x() - self.OVERTIME_BASE_W) // 2}+{self.winfo_y()}")
+        self.geometry(f"{w}x{h}+{self.winfo_x() - self.OVERTIME_GROWTH_W // 2}+{self.winfo_y()}")
 
     def tick(self) -> None:
         if self.status == "SILENT":
