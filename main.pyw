@@ -48,7 +48,9 @@ class Session:
 
     @property
     def effective_elapsed_sec(self) -> float:
-        return max(0.0, (time() - self.start_at) - self.total_paused - self.current_pause_sec)
+        return max(
+            0.0, (time() - self.start_at) - self.total_paused - self.current_pause_sec
+        )
 
     @property
     def remaining_sec(self) -> float:
@@ -62,7 +64,7 @@ class Session:
 
     @property
     def extend_cap_sec(self) -> float:
-        return max(10 * 60, self.planned_sec / 2)
+        return max(2 * 60, self.planned_sec / 2)
 
     @property
     def extend_remaining_sec(self) -> float:
@@ -89,16 +91,16 @@ class HistoryStore:
             return []
 
         parsed: list[HistoryEntry] = []
-        for item in data:
+        for item in data:  # pyright: ignore[reportUnknownVariableType]
             if not isinstance(item, dict):
                 continue
             try:
                 entry: HistoryEntry = {
-                    "released_at": str(item["released_at"]),
-                    "intent": str(item["intent"]),
-                    "planned_min": float(item["planned_min"]),
-                    "actual_focus_min": float(item["actual_focus_min"]),
-                    "overtime_min": float(item["overtime_min"]),
+                    "released_at": str(item["released_at"]),  # type: ignore
+                    "intent": str(item["intent"]),  # type: ignore
+                    "planned_min": float(item["planned_min"]),  # type: ignore
+                    "actual_focus_min": float(item["actual_focus_min"]),  # type: ignore
+                    "overtime_min": float(item["overtime_min"]),  # type: ignore
                     "status": "released",
                 }
                 parsed.append(entry)
@@ -112,7 +114,9 @@ class HistoryStore:
             encoding="utf-8",
         )
 
-    def append_release(self, history: list[HistoryEntry], session: Session) -> list[HistoryEntry]:
+    def append_release(
+        self, history: list[HistoryEntry], session: Session
+    ) -> list[HistoryEntry]:
         if session.start_at <= 0:
             return history
 
@@ -160,12 +164,15 @@ class GateKeeper(tk.Tk):
         self.session = Session()
         self.status: AppState = "VOID"
 
-        self.history_store = HistoryStore(Path("gate_keeper_history.json"), self.HISTORY_LIMIT)
+        self.history_store = HistoryStore(
+            Path("gate_keeper_history.json"), self.HISTORY_LIMIT
+        )
         self.history: list[HistoryEntry] = self.history_store.load()
 
         self.progress_canvas: tk.Canvas | None = None
         self.progress_fill_id: int | None = None
         self.lbl_time: tk.Label | None = None
+        self.btn_pause: tk.Button | None = None
 
         self._active_bindings: list[str] = []
         self._drag_x = 0
@@ -191,9 +198,24 @@ class GateKeeper(tk.Tk):
     def do_drag(self, event: tk.Event) -> None:
         if self.status == "VOID":
             return
+
+        # Calculate new position
         dx = event.x - self._drag_x
         dy = event.y - self._drag_y
-        self.geometry(f"+{self.winfo_x() + dx}+{self.winfo_y() + dy}")
+        new_x = self.winfo_x() + dx
+        new_y = self.winfo_y() + dy
+
+        # Get screen and window dimensions
+        screen_w = self.winfo_screenwidth()
+        screen_h = self.winfo_screenheight()
+        win_w = self.winfo_width()
+        win_h = self.winfo_height()
+
+        # Constrain to screen boundaries
+        new_x = max(0, min(new_x, screen_w - win_w))
+        new_y = max(0, min(new_y, screen_h - win_h))
+
+        self.geometry(f"+{new_x}+{new_y}")
 
     def _clear_bindings(self) -> None:
         for seq in self._active_bindings:
@@ -217,7 +239,14 @@ class GateKeeper(tk.Tk):
 
         sw, sh = self.winfo_screenwidth(), self.winfo_screenheight()
         w, h = size if size else (sw, sh)
-        self.geometry(f"{w}x{h}+{int((sw - w) / 2)}+0")
+
+        # Constrain initial position to screen
+        x = int((sw - w) / 2)
+        y = 0
+        x = max(0, min(x, sw - w))
+        y = max(0, min(y, sh - h))
+
+        self.geometry(f"{w}x{h}+{x}+{y}")
 
     @staticmethod
     def _validate_float(value: str) -> bool:
@@ -233,9 +262,9 @@ class GateKeeper(tk.Tk):
     def to_void(self) -> None:
         self.transition("VOID")
 
-        tk.Label(self.stage, text="GOAL", font=Theme.FONT_MONO, fg=Theme.ACCENT, bg=Theme.BG).pack(
-            pady=(50, 5)
-        )
+        tk.Label(
+            self.stage, text="GOAL", font=Theme.FONT_MONO, fg=Theme.ACCENT, bg=Theme.BG
+        ).pack(pady=(50, 5))
 
         ent_intent = tk.Entry(
             self.stage,
@@ -250,7 +279,11 @@ class GateKeeper(tk.Tk):
         ent_intent.focus_set()
 
         tk.Label(
-            self.stage, text="MINUTES", font=Theme.FONT_MONO, fg=Theme.ACCENT, bg=Theme.BG
+            self.stage,
+            text="MINUTES",
+            font=Theme.FONT_MONO,
+            fg=Theme.ACCENT,
+            bg=Theme.BG,
         ).pack(pady=(16, 5))
 
         vcmd = (self.register(self._validate_float), "%P")
@@ -276,7 +309,10 @@ class GateKeeper(tk.Tk):
             tk.Button(
                 preset_frame,
                 text=text,
-                command=lambda m=text: (ent_time.delete(0, "end"), ent_time.insert(0, m)),
+                command=lambda m=text: (
+                    ent_time.delete(0, "end"),
+                    ent_time.insert(0, m),
+                ),
                 bg=Theme.BG,
                 fg=Theme.FG,
                 relief="flat",
@@ -313,11 +349,24 @@ class GateKeeper(tk.Tk):
         self._render_history_list()
 
     def to_silent(self) -> None:
-        self.transition("SILENT", (240, 96))
+        self.transition("SILENT", (280, 180))
 
-        self.lbl_time = tk.Label(self.stage, text="--:--", font=Theme.FONT_H, fg=Theme.FG, bg=Theme.BG)
-        self.lbl_time.pack(pady=(8, 2))
+        # Display intent
+        tk.Label(
+            self.stage,
+            text=self.session.intent,
+            font=Theme.FONT_P,
+            fg=Theme.ACCENT,
+            bg=Theme.BG,
+        ).pack(pady=(12, 4))
 
+        # Timer display
+        self.lbl_time = tk.Label(
+            self.stage, text="--:--", font=Theme.FONT_H, fg=Theme.FG, bg=Theme.BG
+        )
+        self.lbl_time.pack(pady=(4, 2))
+
+        # Progress bar
         self.progress_canvas = tk.Canvas(
             self.stage,
             width=self.PROGRESS_WIDTH,
@@ -326,17 +375,51 @@ class GateKeeper(tk.Tk):
             highlightthickness=0,
             bd=0,
         )
-        self.progress_canvas.pack(pady=(0, 10))
+        self.progress_canvas.pack(pady=(0, 12))
         self.progress_canvas.create_rectangle(
-            0, 0, self.PROGRESS_WIDTH, self.PROGRESS_HEIGHT, outline=Theme.ACCENT, width=1
+            0,
+            0,
+            self.PROGRESS_WIDTH,
+            self.PROGRESS_HEIGHT,
+            outline=Theme.ACCENT,
+            width=1,
         )
         self.progress_fill_id = self.progress_canvas.create_rectangle(
             0, 0, 0, self.PROGRESS_HEIGHT, fill=Theme.ACCENT, width=0
         )
 
-        self.lbl_time.bind("<Button-1>", lambda _e: self.toggle_pause())
+        # Button frame
+        btn_frame = tk.Frame(self.stage, bg=Theme.BG)
+        btn_frame.pack(pady=(0, 12))
+
+        # Pause button
+        self.btn_pause = tk.Button(
+            btn_frame,
+            text="PAUSE",
+            command=self.toggle_pause,
+            bg=Theme.BG,
+            fg=Theme.FG,
+            relief="flat",
+            padx=12,
+            pady=4,
+        )
+        self.btn_pause.pack(side="left", padx=4)
+
+        # Back button
+        tk.Button(
+            btn_frame,
+            text="BACK",
+            command=self._release,
+            bg=Theme.BG,
+            fg=Theme.WARN,
+            relief="flat",
+            padx=12,
+            pady=4,
+        ).pack(side="left", padx=4)
+
+        # Keep keyboard shortcuts
         self._bind_tracked("<space>", lambda _e: self.toggle_pause())
-        self._bind_tracked("<Escape>", lambda _e: self.to_void())
+        self._bind_tracked("<Escape>", lambda _e: self._release())
 
     def to_overtime(self) -> None:
         self.transition("OVERTIME", (self.OVERTIME_BASE_W, self.OVERTIME_BASE_H))
@@ -345,7 +428,11 @@ class GateKeeper(tk.Tk):
         self._update_overtime_growth()
 
         tk.Label(
-            self.stage, text="LIMIT REACHED", font=Theme.FONT_MONO, fg=Theme.CRITICAL, bg=Theme.BG
+            self.stage,
+            text="LIMIT REACHED",
+            font=Theme.FONT_MONO,
+            fg=Theme.CRITICAL,
+            bg=Theme.BG,
         ).pack(pady=(16, 6))
 
         remain_min = round(self.session.extend_remaining_sec / 60.0, 1)
@@ -391,14 +478,10 @@ class GateKeeper(tk.Tk):
                 bg=Theme.BG,
             ).pack(pady=(0, 8))
 
-        def release() -> None:
-            self.history = self.history_store.append_release(self.history, self.session)
-            self.to_void()
-
         tk.Button(
             btn_frame,
             text="RELEASE",
-            command=release,
+            command=self._release,
             bg=Theme.CRITICAL,
             fg=Theme.BG,
             relief="flat",
@@ -409,13 +492,24 @@ class GateKeeper(tk.Tk):
     def toggle_pause(self) -> None:
         if self.lbl_time is None:
             return
+
         if self.session.paused_at is None:
+            # Pause
             self.session.paused_at = time()
             self.lbl_time.config(fg=Theme.WARN)
+            if self.btn_pause:
+                self.btn_pause.config(text="RESUME", fg=Theme.ACCENT)
         else:
+            # Resume
             self.session.total_paused += time() - self.session.paused_at
             self.session.paused_at = None
             self.lbl_time.config(fg=Theme.FG)
+            if self.btn_pause:
+                self.btn_pause.config(text="PAUSE", fg=Theme.FG)
+
+    def _release(self) -> None:
+        self.history = self.history_store.append_release(self.history, self.session)
+        self.to_void()
 
     def _update_overtime_growth(self) -> None:
         if self.status != "OVERTIME" or self._overtime_started_at is None:
@@ -427,9 +521,28 @@ class GateKeeper(tk.Tk):
             return
 
         self._overtime_steps_applied = steps
-        w = min(self.OVERTIME_BASE_W + (steps * self.OVERTIME_GROWTH_W), self.winfo_screenwidth())
-        h = min(self.OVERTIME_BASE_H + (steps * self.OVERTIME_GROWTH_H), self.winfo_screenheight())
-        self.geometry(f"{w}x{h}+{self.winfo_x() - self.OVERTIME_GROWTH_W // 2}+{self.winfo_y()}")
+
+        # Calculate new dimensions
+        new_w = min(
+            self.OVERTIME_BASE_W + (steps * self.OVERTIME_GROWTH_W),
+            self.winfo_screenwidth(),
+        )
+        new_h = min(
+            self.OVERTIME_BASE_H + (steps * self.OVERTIME_GROWTH_H),
+            self.winfo_screenheight(),
+        )
+
+        # Calculate new position (centered growth)
+        new_x = self.winfo_x() - self.OVERTIME_GROWTH_W // 2
+        new_y = self.winfo_y()
+
+        # Constrain to screen boundaries
+        screen_w = self.winfo_screenwidth()
+        screen_h = self.winfo_screenheight()
+        new_x = max(0, min(new_x, screen_w - new_w))
+        new_y = max(0, min(new_y, screen_h - new_h))
+
+        self.geometry(f"{new_w}x{new_h}+{new_x}+{new_y}")
 
     def tick(self) -> None:
         if self.status == "SILENT":
@@ -438,14 +551,20 @@ class GateKeeper(tk.Tk):
                 self.to_overtime()
             elif self.lbl_time is not None:
                 m, s = divmod(abs(int(remaining)), 60)
-                pause_icon = " ⏸" if self.session.paused_at else ""
-                self.lbl_time.config(text=f"{m:02d}:{s:02d}{pause_icon}")
+                self.lbl_time.config(text=f"{m:02d}:{s:02d}")
 
-                if self.progress_canvas is not None and self.progress_fill_id is not None:
+                if (
+                    self.progress_canvas is not None
+                    and self.progress_fill_id is not None
+                ):
                     fill_w = int(self.PROGRESS_WIDTH * self.session.progress)
                     fill_color = Theme.WARN if self.session.paused_at else Theme.ACCENT
-                    self.progress_canvas.coords(self.progress_fill_id, 0, 0, fill_w, self.PROGRESS_HEIGHT)
-                    self.progress_canvas.itemconfig(self.progress_fill_id, fill=fill_color)
+                    self.progress_canvas.coords(
+                        self.progress_fill_id, 0, 0, fill_w, self.PROGRESS_HEIGHT
+                    )
+                    self.progress_canvas.itemconfig(
+                        self.progress_fill_id, fill=fill_color
+                    )
 
         elif self.status == "OVERTIME":
             self._update_overtime_growth()
