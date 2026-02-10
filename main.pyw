@@ -427,8 +427,8 @@ class GateKeeper(tk.Tk):
             return
 
         self._overtime_steps_applied = steps
-        w = self.OVERTIME_BASE_W + (steps * self.OVERTIME_GROWTH_W)
-        h = self.OVERTIME_BASE_H + (steps * self.OVERTIME_GROWTH_H)
+        w = min(self.OVERTIME_BASE_W + (steps * self.OVERTIME_GROWTH_W), self.winfo_screenwidth())
+        h = min(self.OVERTIME_BASE_H + (steps * self.OVERTIME_GROWTH_H), self.winfo_screenheight())
         self.geometry(f"{w}x{h}+{self.winfo_x() - self.OVERTIME_GROWTH_W // 2}+{self.winfo_y()}")
 
     def tick(self) -> None:
