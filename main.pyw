@@ -64,7 +64,7 @@ class Session:
 
     @property
     def extend_cap_sec(self) -> float:
-        return max(2 * 60, self.planned_sec / 2)
+        return max(2 * 60, self.planned_sec / 5)
 
     @property
     def extend_remaining_sec(self) -> float:
@@ -142,7 +142,7 @@ class GateKeeper(tk.Tk):
     PROGRESS_WIDTH = 200
     PROGRESS_HEIGHT = 8
     HISTORY_LIMIT = 200
-    HISTORY_VISIBLE = 8
+    HISTORY_VISIBLE = 12
 
     PRESETS: list[float] = [0.5, 2, 5, 10, 15, 20, 30, 45, 60, 90, 120, 180]
     EXTEND_OPTIONS = [2, 5, 15]
