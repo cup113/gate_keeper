@@ -139,7 +139,7 @@ class HistoryStore:
 
 
 class GateKeeper(tk.Tk):
-    PROGRESS_WIDTH = 200
+    PROGRESS_WIDTH = 180
     PROGRESS_HEIGHT = 8
     HISTORY_LIMIT = 200
     HISTORY_VISIBLE = 12
@@ -349,24 +349,21 @@ class GateKeeper(tk.Tk):
         self._render_history_list()
 
     def to_silent(self) -> None:
-        self.transition("SILENT", (280, 180))
+        self.transition("SILENT", (220, 130))
 
-        # Display intent
         tk.Label(
             self.stage,
             text=self.session.intent,
             font=Theme.FONT_P,
             fg=Theme.ACCENT,
             bg=Theme.BG,
-        ).pack(pady=(12, 4))
+        ).pack(pady=(6, 0))
 
-        # Timer display
         self.lbl_time = tk.Label(
             self.stage, text="--:--", font=Theme.FONT_H, fg=Theme.FG, bg=Theme.BG
         )
-        self.lbl_time.pack(pady=(4, 2))
+        self.lbl_time.pack(pady=(0, 4))
 
-        # Progress bar
         self.progress_canvas = tk.Canvas(
             self.stage,
             width=self.PROGRESS_WIDTH,
@@ -375,7 +372,7 @@ class GateKeeper(tk.Tk):
             highlightthickness=0,
             bd=0,
         )
-        self.progress_canvas.pack(pady=(0, 12))
+        self.progress_canvas.pack(pady=(0, 6))
         self.progress_canvas.create_rectangle(
             0,
             0,
@@ -388,11 +385,9 @@ class GateKeeper(tk.Tk):
             0, 0, 0, self.PROGRESS_HEIGHT, fill=Theme.ACCENT, width=0
         )
 
-        # Button frame
         btn_frame = tk.Frame(self.stage, bg=Theme.BG)
-        btn_frame.pack(pady=(0, 12))
+        btn_frame.pack(pady=(0, 6))
 
-        # Pause button
         self.btn_pause = tk.Button(
             btn_frame,
             text="PAUSE",
@@ -400,12 +395,11 @@ class GateKeeper(tk.Tk):
             bg=Theme.BG,
             fg=Theme.FG,
             relief="flat",
-            padx=12,
-            pady=4,
+            padx=8,
+            pady=2,
         )
         self.btn_pause.pack(side="left", padx=4)
 
-        # Back button
         tk.Button(
             btn_frame,
             text="BACK",
@@ -413,8 +407,8 @@ class GateKeeper(tk.Tk):
             bg=Theme.BG,
             fg=Theme.WARN,
             relief="flat",
-            padx=12,
-            pady=4,
+            padx=8,
+            pady=2,
         ).pack(side="left", padx=4)
 
         # Keep keyboard shortcuts
