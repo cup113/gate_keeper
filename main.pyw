@@ -160,6 +160,7 @@ class GateKeeper(tk.Tk):
         self.configure(bg=Theme.BG)
         self.attributes("-topmost", True)
         self.overrideredirect(True)
+        self.attributes("-toolwindow", True)
         self.protocol("WM_DELETE_WINDOW", lambda: None)
 
         self.session = Session()
