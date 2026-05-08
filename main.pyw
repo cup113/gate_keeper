@@ -132,8 +132,6 @@ class HistoryStore:
         actual_focus_min = round(session.effective_elapsed_sec / 60, 2)
         planned_min = round(session.planned_sec / 60, 2)
         overtime_min = round(max(0.0, actual_focus_min - planned_min), 2)
-        if overtime_min < 1.0:
-            overtime_min = 0.0
 
         history.append(
             {
@@ -782,11 +780,11 @@ class GateKeeper(tk.Tk):
             row = tk.Frame(box, bg=Theme.BG)
             row.pack(fill="x")
 
-            released = entry["released_at"][5:16]
+            released = entry["released_at"][5:16].replace("T", " ")
             intent = entry["intent"]
             focus = entry["actual_focus_min"]
             ot = entry["overtime_min"]
-            has_ot = ot > 0
+            has_ot = ot >= 1.0
 
             fg = Theme.WARN if has_ot else Theme.FG
             text = f"{released}  {intent:<14}  {focus:g}m"
