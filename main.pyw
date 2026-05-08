@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import json
 import tkinter as tk
-from collections import defaultdict
+from tkinter import messagebox
 from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
@@ -86,6 +86,14 @@ class HistoryStore:
         try:
             data = json.loads(self.path.read_text(encoding="utf-8"))
         except (json.JSONDecodeError, OSError):
+            bak = self.path.with_suffix(self.path.suffix + ".bak")
+            if not bak.exists():
+                try:
+                    import shutil
+
+                    shutil.copy2(self.path, bak)
+                except OSError:
+                    pass
             return []
 
         if not isinstance(data, list):
@@ -138,11 +146,19 @@ class HistoryStore:
         self.save(history)
         return history
 
+    def delete_entry(
+        self, history: list[HistoryEntry], index: int
+    ) -> list[HistoryEntry]:
+        if 0 <= index < len(history):
+            history.pop(index)
+            self.save(history)
+        return history
+
 
 class GateKeeper(tk.Tk):
     PROGRESS_WIDTH = 180
     PROGRESS_HEIGHT = 8
-    HISTORY_LIMIT = 200
+    HISTORY_LIMIT = 1000
     HISTORY_VISIBLE = 12
 
     PRESETS: list[float] = [0.5, 2, 5, 10, 15, 20, 30, 45, 60, 90, 120, 180]
@@ -170,6 +186,10 @@ class GateKeeper(tk.Tk):
             Path("gate_keeper_history.json"), self.HISTORY_LIMIT
         )
         self.history: list[HistoryEntry] = self.history_store.load()
+        self.history_page = 0
+        self.history_filter = ""
+        self.history_frame: tk.Frame | None = None
+        self.history_content: tk.Frame | None = None
 
         self.progress_canvas: tk.Canvas | None = None
         self.progress_fill_id: int | None = None
@@ -397,7 +417,42 @@ class GateKeeper(tk.Tk):
             padx=30,
         ).pack(pady=16)
 
-        self._render_history_list()
+        history_wrapper = tk.Frame(self.stage, bg=Theme.BG)
+        history_wrapper.pack(fill="x")
+        tk.Frame(history_wrapper, bg=Theme.BG).pack(side="left", expand=True, fill="x")
+        self.history_frame = tk.Frame(history_wrapper, bg=Theme.BG)
+        self.history_frame.pack(side="left")
+        tk.Frame(history_wrapper, bg=Theme.BG).pack(side="left", expand=True, fill="x")
+
+        top_bar = tk.Frame(self.history_frame, bg=Theme.BG)
+        top_bar.pack(fill="x", pady=(14, 4))
+        tk.Label(
+            top_bar, text="FILTER", font=Theme.FONT_MONO, fg=Theme.ACCENT, bg=Theme.BG
+        ).pack(side="left")
+        self.filter_ent = tk.Entry(
+            top_bar,
+            font=Theme.FONT_MONO,
+            fg=Theme.FG,
+            bg=Theme.BG,
+            bd=0,
+            insertbackground=Theme.FG,
+            width=14,
+        )
+        self.filter_ent.pack(side="left", padx=(4, 0))
+        self.filter_ent.bind("<KeyRelease>", self._on_filter_keyrelease)
+        tk.Button(
+            top_bar,
+            text="CLEAR",
+            command=self._clear_filter,
+            bg=Theme.BG,
+            fg=Theme.WARN,
+            relief="flat",
+            padx=6,
+        ).pack(side="left", padx=4)
+
+        self.history_content = tk.Frame(self.history_frame, bg=Theme.BG)
+        self.history_content.pack(fill="x")
+        self._rebuild_history_ui()
 
     def to_silent(self) -> None:
         self._fade_transition("SILENT", (220, 160), self._build_silent)
@@ -637,53 +692,162 @@ class GateKeeper(tk.Tk):
         self.after(500, self.tick)
 
     # --- History UI ---
-    def _render_history_list(self) -> None:
+    def _get_filtered_history(self) -> list[tuple[int, HistoryEntry]]:
+        if not self.history_filter:
+            return [
+                (len(self.history) - 1 - i, e)
+                for i, e in enumerate(reversed(self.history))
+            ]
+        kw = self.history_filter.lower()
+        return [
+            (len(self.history) - 1 - i, e)
+            for i, e in enumerate(reversed(self.history))
+            if kw in e["intent"].lower()
+        ]
+
+    def _delete_entry(self, real_idx: int) -> None:
+        if not messagebox.askyesno("DELETE", "Delete this record?"):
+            return
+        self.history = self.history_store.delete_entry(self.history, real_idx)
+        self._rebuild_history_ui()
+
+    def _on_filter_keyrelease(self, event: tk.Event) -> None:
+        self.history_filter = event.widget.get()
+        self.history_page = 0
+        self._rebuild_history_ui()
+
+    def _clear_filter(self) -> None:
+        self.filter_ent.delete(0, "end")
+        self.history_filter = ""
+        self.history_page = 0
+        self._rebuild_history_ui()
+
+    def _prev_page(self) -> None:
+        if self.history_page > 0:
+            self.history_page -= 1
+            self._rebuild_history_ui()
+
+    def _next_page(self) -> None:
+        indexed = self._get_filtered_history()
+        total_pages = max(
+            1, (len(indexed) + self.HISTORY_VISIBLE - 1) // self.HISTORY_VISIBLE
+        )
+        if self.history_page < total_pages - 1:
+            self.history_page += 1
+            self._rebuild_history_ui()
+
+    def _rebuild_history_ui(self) -> None:
+        for w in self.history_content.winfo_children():
+            w.destroy()
+
+        indexed = self._get_filtered_history()
+
         if not self.history:
             return
 
+        if not indexed:
+            tk.Label(
+                self.history_content,
+                text="NO MATCHES",
+                font=Theme.FONT_MONO,
+                fg="#555",
+                bg=Theme.BG,
+            ).pack(pady=(20, 8))
+            return
+
+        total_pages = max(
+            1, (len(indexed) + self.HISTORY_VISIBLE - 1) // self.HISTORY_VISIBLE
+        )
+        self.history_page = min(self.history_page, total_pages - 1)
+        start = self.history_page * self.HISTORY_VISIBLE
+        end = start + self.HISTORY_VISIBLE
+        page_indexed = indexed[start:end]
+
+        # --- Header ---
         tk.Label(
-            self.stage,
+            self.history_content,
             text="RECENT RELEASES",
             font=Theme.FONT_MONO,
             fg=Theme.ACCENT,
             bg=Theme.BG,
-        ).pack(pady=(20, 6))
+        ).pack(pady=(6, 4))
 
-        groups: dict[str, list[HistoryEntry]] = defaultdict(list)
-        for entry in reversed(self.history[-self.HISTORY_VISIBLE :]):
-            groups[entry["intent"]].append(entry)
+        # --- Entries ---
+        box = tk.Frame(self.history_content, bg=Theme.BG)
+        box.pack(fill="x", pady=(0, 4))
 
-        box = tk.Frame(self.stage, bg=Theme.BG)
-        box.pack(pady=(0, 12))
-
-        for intent, entries in groups.items():
-            total_min = sum(e["actual_focus_min"] for e in entries)
-            count = len(entries)
-            overtime_total = sum(e["overtime_min"] for e in entries)
-            has_ot = overtime_total > 0
-
+        for real_idx, entry in page_indexed:
             row = tk.Frame(box, bg=Theme.BG)
             row.pack(fill="x")
 
-            main_fg = Theme.WARN if has_ot else Theme.FG
+            released = entry["released_at"][5:16]
+            intent = entry["intent"]
+            focus = entry["actual_focus_min"]
+            ot = entry["overtime_min"]
+            has_ot = ot > 0
+
+            fg = Theme.WARN if has_ot else Theme.FG
+            text = f"{released}  {intent:<14}  {focus:g}m"
+            if has_ot:
+                text += f"  +{ot:g}m"
+
             tk.Label(
                 row,
-                text=f"{intent:<14} \u00d7{count}  {total_min:g}m",
+                text=text,
                 font=Theme.FONT_MONO,
-                fg=main_fg,
+                fg=fg,
                 bg=Theme.BG,
                 anchor="w",
             ).pack(side="left")
 
-            if has_ot:
-                tk.Label(
-                    row,
-                    text=f"  +{overtime_total:g}m",
-                    font=Theme.FONT_MONO,
-                    fg=Theme.WARN,
-                    bg=Theme.BG,
-                    anchor="w",
-                ).pack(side="left")
+            tk.Button(
+                row,
+                text="\u00d7",
+                command=lambda idx=real_idx: self._delete_entry(idx),
+                bg=Theme.BG,
+                fg="#555",
+                relief="flat",
+                padx=4,
+            ).pack(side="right")
+
+        # --- Pagination ---
+        if total_pages > 1:
+            nav = tk.Frame(self.history_content, bg=Theme.BG)
+            nav.pack(pady=(0, 8))
+
+            prev_btn = tk.Button(
+                nav,
+                text="\u25c0 PREV",
+                command=self._prev_page,
+                bg=Theme.BG,
+                fg=Theme.FG,
+                relief="flat",
+                padx=8,
+            )
+            prev_btn.pack(side="left", padx=2)
+            if self.history_page <= 0:
+                prev_btn.config(state="disabled")
+
+            tk.Label(
+                nav,
+                text=f"{self.history_page + 1}/{total_pages}",
+                font=Theme.FONT_MONO,
+                fg=Theme.FG,
+                bg=Theme.BG,
+            ).pack(side="left", padx=8)
+
+            next_btn = tk.Button(
+                nav,
+                text="NEXT \u25b6",
+                command=self._next_page,
+                bg=Theme.BG,
+                fg=Theme.FG,
+                relief="flat",
+                padx=8,
+            )
+            next_btn.pack(side="left", padx=2)
+            if self.history_page >= total_pages - 1:
+                next_btn.config(state="disabled")
 
 
 if __name__ == "__main__":
