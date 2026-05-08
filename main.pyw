@@ -132,6 +132,8 @@ class HistoryStore:
         actual_focus_min = round(session.effective_elapsed_sec / 60, 2)
         planned_min = round(session.planned_sec / 60, 2)
         overtime_min = round(max(0.0, actual_focus_min - planned_min), 2)
+        if overtime_min < 1.0:
+            overtime_min = 0.0
 
         history.append(
             {
