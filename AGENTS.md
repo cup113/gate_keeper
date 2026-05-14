@@ -44,10 +44,10 @@ VOID ──(ENGAGE)──> SILENT ──(time up)──> OVERTIME
 | `main.pyw` | All source: `GateKeeper(tk.Tk)` with `_build_void()`, `_build_silent()`, `_build_overtime()` |
 | `build.bat` | `python -m nuitka --standalone --windows-console-mode=disable --output-dir=dist --enable-plugin=tk-inter main.pyw` |
 
-## Versioning
+## Versioning (current: v1.0.0)
 
 When bumping versions:
 1. Identify all version occurrences (README, CHANGELOG, AGENTS.md)
-2. Maintain/initialize `CHANGELOG.md`
+2. Update `CHANGELOG.md`
 3. Commit changes
 4. Create a Git tag
