@@ -1,4 +1,4 @@
-# GateKeeper v1.0.0 — 专注力守卫者
+# GateKeeper v1.0.1 — 专注力守卫者
 
 > 用着用着就跑偏？GateKeeper 会在你走神时温柔地提醒你，并记录每一次专注的历程。
 
@@ -36,7 +36,7 @@
 
 ### 3. 历史追踪
 
-- 自动保存最近 1000 次释放记录到 `gate_keeper_history.json`
+- 自动保存最近 1000 次释放记录到 `%APPDATA%\GateKeeper\gate_keeper_history.json`
 - VOID 界面显示最近 12 条记录，支持分页浏览
 - 支持按意图关键词筛选历史记录
 - 每条记录可单独删除
@@ -60,7 +60,7 @@
 
 ### 环境要求
 
-- Python 3.8+
+- Python 3.9+
 - 无需额外依赖（标准库：`tkinter`, `json`, `dataclasses`, `pathlib` 等）
 
 ### 运行
@@ -108,7 +108,7 @@ python main.pyw
 
 ## 📊 数据记录示例
 
-`gate_keeper_history.json` 片段：
+`%APPDATA%\GateKeeper\gate_keeper_history.json` 片段：
 ```json
 [
   {
@@ -155,7 +155,6 @@ class GateKeeper(tk.Tk):
 gate_keeper/
 ├── main.pyw                 # 单文件实现，无外部依赖
 ├── build.bat                # Nuitka 构建脚本
-├── gate_keeper_history.json # 自动生成的历史记录
 ├── README.md                # 本文档
 ├── AGENTS.md                # AI助手指令
 ├── CHANGELOG.md             # 变更日志

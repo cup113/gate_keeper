@@ -1,14 +1,16 @@
 from __future__ import annotations
 
 import json
+import logging
+import os
 import tkinter as tk
-from tkinter import messagebox
+from collections.abc import Callable
 from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
 from time import time
-from typing import Callable, Literal, TypedDict
-
+from tkinter import messagebox
+from typing import Literal, TypedDict
 
 AppState = Literal["VOID", "SILENT", "OVERTIME"]
 
@@ -22,6 +24,9 @@ class Theme:
     FONT_H = ("Segoe UI", 24, "bold")
     FONT_P = ("Segoe UI", 11)
     FONT_MONO = ("Consolas", 10)
+
+
+APP_DATA_DIR = Path(os.environ.get("APPDATA", str(Path.home()))) / "GateKeeper"
 
 
 class HistoryEntry(TypedDict):
@@ -182,8 +187,9 @@ class GateKeeper(tk.Tk):
         self.session = Session()
         self.status: AppState = "VOID"
 
+        APP_DATA_DIR.mkdir(parents=True, exist_ok=True)
         self.history_store = HistoryStore(
-            Path("gate_keeper_history.json"), self.HISTORY_LIMIT
+            APP_DATA_DIR / "gate_keeper_history.json", self.HISTORY_LIMIT
         )
         self.history: list[HistoryEntry] = self.history_store.load()
         self.history_page = 0
@@ -712,7 +718,9 @@ class GateKeeper(tk.Tk):
         self._rebuild_history_ui()
 
     def _on_filter_keyrelease(self, event: tk.Event) -> None:
-        self.history_filter = event.widget.get()
+        widget = event.widget
+        assert isinstance(widget, tk.Entry)
+        self.history_filter = widget.get()
         self.history_page = 0
         self._rebuild_history_ui()
 
@@ -737,6 +745,8 @@ class GateKeeper(tk.Tk):
             self._rebuild_history_ui()
 
     def _rebuild_history_ui(self) -> None:
+        if self.history_content is None:
+            return
         for w in self.history_content.winfo_children():
             w.destroy()
 
@@ -851,4 +861,14 @@ class GateKeeper(tk.Tk):
 
 
 if __name__ == "__main__":
-    GateKeeper().mainloop()
+    APP_DATA_DIR.mkdir(parents=True, exist_ok=True)
+    logging.basicConfig(
+        filename=APP_DATA_DIR / "gate_keeper.log",
+        level=logging.INFO,
+        format="%(asctime)s [%(levelname)s] %(message)s",
+    )
+    logging.info("GateKeeper starting")
+    try:
+        GateKeeper().mainloop()
+    except Exception:
+        logging.exception("GateKeeper crashed on startup")

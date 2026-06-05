@@ -1,12 +1,8 @@
 # GateKeeper AGENTS.md
 
-## Shell Syntax
-
-Since the environment is Windows (PowerShell), always use `;` as the delimiter, not `&&`.
-
 ## Framework & Architecture
 
-- **Language:** Python 3.8+ (enforce type hints via `from __future__ import annotations`)
+- **Language:** Python 3.9+ (enforce type hints via `from __future__ import annotations`)
 - **GUI:** Tkinter (stdlib) — single-window, three-state model
 - **Lint:** `ruff check .` (format with `ruff format .`)
 - **Build:** `.\build.bat` (Nuitka → standalone `dist/main.dist/main.exe`)
@@ -16,9 +12,8 @@ Since the environment is Windows (PowerShell), always use `;` as the delimiter, 
 
 ```
 gate_keeper/
-├── main.pyw                 # Single-file app (~850 lines)
+├── main.pyw                 # Single-file app (~870 lines)
 ├── build.bat                # Nuitka build script
-├── gate_keeper_history.json # Auto-generated history data
 ├── README.md
 ├── AGENTS.md
 ├── LICENSE                  # Apache 2.0
@@ -28,13 +23,15 @@ gate_keeper/
 ## State Machine & Data Flow
 
 ```
+              ┌────(extend)────┐
+              ▼                │
 VOID ──(ENGAGE)──> SILENT ──(time up)──> OVERTIME
   ^                   │                      │
-  └──(Esc/abort)──────┘    (RELEASE)─────────┘
+  └────(release)──────┘    (release)─────────┘
 ```
 
 - **Session** (dataclass) — holds intent, time tracking, pause state, progress, extend budget
-- **HistoryStore** — loads/saves `gate_keeper_history.json` (JSON array of `HistoryEntry`)
+- **HistoryStore** — loads/saves `APP_DATA_DIR / gate_keeper_history.json` (JSON array of `HistoryEntry`)
 - **Theme** — design tokens (dark bg, emerald accent, Segoe UI)
 
 ## Key Files
@@ -44,7 +41,7 @@ VOID ──(ENGAGE)──> SILENT ──(time up)──> OVERTIME
 | `main.pyw` | All source: `GateKeeper(tk.Tk)` with `_build_void()`, `_build_silent()`, `_build_overtime()` |
 | `build.bat` | `python -m nuitka --standalone --windows-console-mode=disable --output-dir=dist --enable-plugin=tk-inter main.pyw` |
 
-## Versioning (current: v1.0.0)
+## Versioning (current: v1.0.1)
 
 When bumping versions:
 1. Identify all version occurrences (README, CHANGELOG, AGENTS.md)
