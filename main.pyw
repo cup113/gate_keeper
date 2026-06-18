@@ -658,6 +658,10 @@ class GateKeeper(tk.Tk):
         new_x = max(0, min(new_x, screen_w - new_w))
         new_y = max(0, min(new_y, screen_h - new_h))
 
+        if new_w >= screen_w and new_h >= screen_h:
+            self._release()
+            return
+
         self.geometry(f"{new_w}x{new_h}+{new_x}+{new_y}")
 
     def tick(self) -> None:
